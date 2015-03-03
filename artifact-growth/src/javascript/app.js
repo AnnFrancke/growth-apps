@@ -73,7 +73,7 @@ Ext.define('CustomApp', {
     },
     _run: function(){
         var start_date = Rally.util.DateTime.add(new Date(),"month",-3); //cb.getValue());
-        var workspaces = this.workspaces.slice(15, 25); //[this.getContext().getWorkspace()];
+        var workspaces = this.workspaces; //[this.getContext().getWorkspace()];
         var cb = this.down('#cb-artifact');
         var type = cb.getValue(); 
         var displayType = cb.getRecord().get(cb.displayField);
