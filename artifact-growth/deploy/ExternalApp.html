@@ -3,10 +3,10 @@
 <head>
     <title>Artifact Growth</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Thu Mar 05 2015 06:35:09 GMT-0700 (MST) -->
+    <!--  Build Date: Thu Mar 05 2015 09:12:57 GMT-0700 (MST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Thu Mar 05 2015 06:35:09 GMT-0700 (MST)";
+        var APP_BUILD_DATE = "Thu Mar 05 2015 09:12:57 GMT-0700 (MST)";
         var CHECKSUM = [%= checksum %];
     </script>
     
@@ -263,6 +263,12 @@ Ext.define('Rally.technicalservices.Toolbox',{
         var day = new Date(year, month+1,0).getDate();
         return new Date(year,month,day,0,0,0,0);
     },
+    getBucketStartForGranularity: function(granularity, date){
+        
+    },
+    getBucketEndForGranularity: function(granularity, date){
+        
+    },
     aggregateSnapsByOid: function(snaps){
         //Return a hash of objects (key=ObjectID) with all snapshots for the object
         var snaps_by_oid = {};
@@ -278,8 +284,12 @@ Ext.define('Rally.technicalservices.Toolbox',{
     },
     getDateBuckets: function(startDate, endDate, granularity){
 
-        var bucketStartDate = Rally.technicalservices.Toolbox.getBeginningOfMonthAsDate(startDate);
-        var bucketEndDate = Rally.technicalservices.Toolbox.getEndOfMonthAsDate(endDate);
+        var bucketStartDate = startDate;
+        var bucketEndDate = endDate; 
+        if (granularity == "month"){
+            bucketStartDate = Rally.technicalservices.Toolbox.getBeginningOfMonthAsDate(startDate);
+            bucketEndDate = Rally.technicalservices.Toolbox.getEndOfMonthAsDate(endDate);
+        }
        
         var date = bucketStartDate;
         
@@ -374,8 +384,17 @@ Ext.define('CustomApp', {
         Rally.technicalservices.Toolbox.fetchWorkspaces().then({
             scope: this,
             success: function(workspaces){
+                var wksp;
+                Ext.each(workspaces, function(w){
+                    if (w.get('Name') == 'Curmudgeon'){
+                        wksp = w;  
+                        return false;  
+                    }
+                });
+                
+                
                 this.logger.log('fetchWorkspaces Success', workspaces.length);
-                this._initialize(workspaces);
+                this._initialize([wksp]); //workspaces);
             }, 
             failure: function(msg){
                 Rally.ui.notify.Notifier.showError({message: msg});
@@ -442,7 +461,7 @@ Ext.define('CustomApp', {
     },
     _run: function(){
         var workspaces = this.workspaces; //[this.getContext().getWorkspace()];
-        
+
         var cb = this.down('#cb-artifact');
         var type = cb.getValue(); 
         var displayType = cb.getRecord().get(cb.displayField);
@@ -493,21 +512,21 @@ Ext.define('CustomApp', {
         Ext.each(categories, function(c){
             text += c + ',';
         });
-        text.replace(/,$/,'\n');
+        text = text.replace(/,+$/,'\n');
         
         Ext.each(seriesData, function(s){
-            text += seriesData.name + ',';
+            text += s.name + ',';
             Ext.each(s.data, function(p){
-                text += p || null;
+                text += p + ',';
             });
-            text.replace(/,$/,'\n');
+            text = text.replace(/,+$/,'\n');
         });
         
         Ext.each(errors, function(e){
             text += e + '\n';
         });
         this.logger.log('setExportData', text);
-        this.down('btn-export').setDisabled(false);
+        this.down('#btn-export').setDisabled(false);
         this.exportData = text;  
     },
     _showErrors: function(errorStrings){
@@ -631,13 +650,13 @@ Ext.define('CustomApp', {
                scope: this,
                load: function(store, records, success){
                    this.logger.log('_fetchCreationDatesLookback time(ms): ', Date.now() - start, records, success);
-                   console.log(records);
                    if (success && records){
                        var data = this._mungeDataForWorkspace(wksp, type, baselineCount, dateBuckets, granularity, records);
                        deferred.resolve(data);
                    } else {
-                       this.logger.log('_fetchCreationDatesLookback failed');
-                       var msg = wksp.get('Name') + ', Load creation dates failed for ' + type;
+                       this.logger.log('_fetchCreationDatesLookback failed', store, records, success);
+                       var msg = wksp.get('Name') + ', load dates failed for ' + type + '; success=' + success + ', records is null ' + (records == null);
+                       console.log(msg);
                        deferred.resolve(msg);
                    }
                }

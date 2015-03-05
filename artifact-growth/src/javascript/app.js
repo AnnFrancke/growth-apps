@@ -31,8 +31,17 @@ Ext.define('CustomApp', {
         Rally.technicalservices.Toolbox.fetchWorkspaces().then({
             scope: this,
             success: function(workspaces){
+                var wksp;
+                Ext.each(workspaces, function(w){
+                    if (w.get('Name') == 'Curmudgeon'){
+                        wksp = w;  
+                        return false;  
+                    }
+                });
+                
+                
                 this.logger.log('fetchWorkspaces Success', workspaces.length);
-                this._initialize(workspaces);
+                this._initialize([wksp]); //workspaces);
             }, 
             failure: function(msg){
                 Rally.ui.notify.Notifier.showError({message: msg});
@@ -99,7 +108,7 @@ Ext.define('CustomApp', {
     },
     _run: function(){
         var workspaces = this.workspaces; //[this.getContext().getWorkspace()];
-        
+
         var cb = this.down('#cb-artifact');
         var type = cb.getValue(); 
         var displayType = cb.getRecord().get(cb.displayField);
@@ -150,14 +159,14 @@ Ext.define('CustomApp', {
         Ext.each(categories, function(c){
             text += c + ',';
         });
-        text.replace(/,$/,'\n');
+        text = text.replace(/,+$/,'\n');
         
         Ext.each(seriesData, function(s){
-            text += seriesData.name + ',';
+            text += s.name + ',';
             Ext.each(s.data, function(p){
                 text += p + ',';
             });
-            text.replace(/,$/,'\n');
+            text = text.replace(/,+$/,'\n');
         });
         
         Ext.each(errors, function(e){
@@ -288,13 +297,13 @@ Ext.define('CustomApp', {
                scope: this,
                load: function(store, records, success){
                    this.logger.log('_fetchCreationDatesLookback time(ms): ', Date.now() - start, records, success);
-                   console.log(records);
                    if (success && records){
                        var data = this._mungeDataForWorkspace(wksp, type, baselineCount, dateBuckets, granularity, records);
                        deferred.resolve(data);
                    } else {
-                       this.logger.log('_fetchCreationDatesLookback failed');
-                       var msg = wksp.get('Name') + ', Load creation dates failed for ' + type;
+                       this.logger.log('_fetchCreationDatesLookback failed', store, records, success);
+                       var msg = wksp.get('Name') + ', load dates failed for ' + type + '; success=' + success + ', records is null ' + (records == null);
+                       console.log(msg);
                        deferred.resolve(msg);
                    }
                }

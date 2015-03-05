@@ -11,6 +11,12 @@ Ext.define('Rally.technicalservices.Toolbox',{
         var day = new Date(year, month+1,0).getDate();
         return new Date(year,month,day,0,0,0,0);
     },
+    getBucketStartForGranularity: function(granularity, date){
+        
+    },
+    getBucketEndForGranularity: function(granularity, date){
+        
+    },
     aggregateSnapsByOid: function(snaps){
         //Return a hash of objects (key=ObjectID) with all snapshots for the object
         var snaps_by_oid = {};
@@ -26,8 +32,12 @@ Ext.define('Rally.technicalservices.Toolbox',{
     },
     getDateBuckets: function(startDate, endDate, granularity){
 
-        var bucketStartDate = Rally.technicalservices.Toolbox.getBeginningOfMonthAsDate(startDate);
-        var bucketEndDate = Rally.technicalservices.Toolbox.getEndOfMonthAsDate(endDate);
+        var bucketStartDate = startDate;
+        var bucketEndDate = endDate; 
+        if (granularity == "month"){
+            bucketStartDate = Rally.technicalservices.Toolbox.getBeginningOfMonthAsDate(startDate);
+            bucketEndDate = Rally.technicalservices.Toolbox.getEndOfMonthAsDate(endDate);
+        }
        
         var date = bucketStartDate;
         
