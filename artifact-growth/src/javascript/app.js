@@ -18,8 +18,13 @@ Ext.define('CustomApp', {
         value: 'week',
         dateFormat: 'M dd yyyy',
         tickInterval: 5
+    },{
+        displayName: 'Day',
+        value: 'day',
+        dateFormat: 'Y-m-d',
+        tickInterval: 30
     }],
-
+    defaultDateSubtractor: -3,
     workspaces: null,
     launch: function() {
 
@@ -59,40 +64,111 @@ Ext.define('CustomApp', {
                 filters: filter,
                  remoteFilter: true
             },
+            margin: 10,
             valueField: 'TypePath',
             displayField: 'DisplayName',
+        });
+        
+        this.down('#selector_box').add({
+            xtype: 'rallydatefield',
+            labelAlign: 'right',
+            fieldLabel: 'Start Date',
+            itemId: 'dt-start',
+            margin: 10,
+            labelWidth: 75,
+            value: Rally.util.DateTime.add(new Date(),"month",this.defaultDateSubtractor)
         });
         
         this.down('#selector_box').add({
             xtype: 'rallybutton',
             text: 'Run',
             scope: this,
+            margin: 10,
             handler: this._run
+        });
+        this.down('#selector_box').add({
+            xtype: 'rallybutton',
+            itemId: 'btn-export',
+            text: 'Export',
+            scope: this,
+            margin: 10,
+            handler: this._export,
+            disabled: true
         });
         
     },
     _run: function(){
-        var start_date = Rally.util.DateTime.add(new Date(),"month",-3); //cb.getValue());
         var workspaces = this.workspaces; //[this.getContext().getWorkspace()];
+        
         var cb = this.down('#cb-artifact');
         var type = cb.getValue(); 
         var displayType = cb.getRecord().get(cb.displayField);
+        
         var granularity = "day";
         var dateFormat = "Y-m-d";
         var end_date = new Date();
-        
+        var start_date = this.down('#dt-start').getValue();
         var dateBuckets= Rally.technicalservices.Toolbox.getDateBuckets(start_date, end_date, granularity);
+
+        this.setLoading(true);
         this._fetchSeriesData(workspaces, type, dateBuckets, granularity).then({
             scope: this,
-            success: function(seriesData){
+            success: function(results){
+                this.logger.log('_fetchData success:', results);
+                var seriesData = [];
+                var errors = [];
+                Ext.each(results, function(obj){
+                    if (typeof obj == 'object'){
+                        seriesData.push(obj);
+                    } else {
+                        errors.push(obj);
+                    }
+                });
                 var categories = Rally.technicalservices.Toolbox.formatDateBuckets(dateBuckets, dateFormat);
-                this.logger.log('_fetchData success:', seriesData);
+                this.setLoading(false);
                 this._drawChart(seriesData, categories, displayType);
+                this._showErrors(errors);
+                this.setExportData(seriesData, categories, errors);
             },
             failure: function(data){
+                this.setLoading(false);
                 this.logger.log('_run._fetchSeriesData failed', data);
             }
         });
+    },
+    _export: function(){
+        var cb = this.down('#cb-artifact');
+        var artifact_type = cb.getValue();
+        var filename = Ext.String.format('{0}-growth-{1}.csv', artifact_type, Rally.util.DateTime.format(new Date(),'Y-m-d'));
+        if (this.exportData){
+            Rally.technicalservices.FileUtilities.saveTextAsFile(this.exportData, filename);
+        }
+    },
+    setExportData: function(seriesData, categories, errors){
+        var text = 'Workspace,';
+        
+        Ext.each(categories, function(c){
+            text += c + ',';
+        });
+        text.replace(/,$/,'\n');
+        
+        Ext.each(seriesData, function(s){
+            text += seriesData.name + ',';
+            Ext.each(s.data, function(p){
+                text += p + ',';
+            });
+            text.replace(/,$/,'\n');
+        });
+        
+        Ext.each(errors, function(e){
+            text += e + '\n';
+        });
+        this.logger.log('setExportData', text);
+        this.down('#btn-export').setDisabled(false);
+        this.exportData = text;  
+    },
+    _showErrors: function(errorStrings){
+        this.logger.log('_showErrors',errorStrings);
     },
     _drawChart: function(seriesData, categories, displayName){
         this.logger.log('_drawChart');
@@ -168,7 +244,7 @@ Ext.define('CustomApp', {
                deferred.resolve(data);
            }, 
            failure: function(data){
-               deferred.reject(data);
+               deferred.resolve(data);
                this.logger.log('_fetchSeriesData return failure',data);
            }
        });
@@ -180,13 +256,14 @@ Ext.define('CustomApp', {
        this._fetchTypeBaselineCountWsapi(wksp, type, dateBuckets[0]).then({
            scope: this,
            success: function(obj){
+              this.setLoading('Fetching data from ' + wksp.get('Name')); 
               this._fetchCreationDatesLookback(wksp, type, obj.maxObjectID, obj.count, dateBuckets, granularity).then({
                   scope: this,
                   success: function(obj){
                       deferred.resolve(obj);
                   },
                   failure: function(msg){
-                      deferred.reject(msg);
+                      deferred.resolve(msg);
                   }
               });  //get the baseline count
           }
@@ -210,15 +287,15 @@ Ext.define('CustomApp', {
            listeners: {
                scope: this,
                load: function(store, records, success){
-                   this.logger.log('_fetchCreationDatesLookback time(ms): ', Date.now() - start, records.length, success);
+                   this.logger.log('_fetchCreationDatesLookback time(ms): ', Date.now() - start, records, success);
                    console.log(records);
-                   if (success){
+                   if (success && records){
                        var data = this._mungeDataForWorkspace(wksp, type, baselineCount, dateBuckets, granularity, records);
                        deferred.resolve(data);
                    } else {
                        this.logger.log('_fetchCreationDatesLookback failed');
-                       var msg = 'Load creation dates failed for ' + type + ' in ' + wksp.get('Name');
-                       deferred.reject(msg);
+                       var msg = wksp.get('Name') + ', Load creation dates failed for ' + type;
+                       deferred.resolve(msg);
                    }
                }
            }
@@ -255,6 +332,7 @@ Ext.define('CustomApp', {
            });
            series_data[i]=artifact_count;  
        }
+       this.logger.log('series data', wksp.get('Name'),series_data);
        return {name: wksp.get('Name'), data: series_data, stack: 1, type: 'area'};  
        
    },

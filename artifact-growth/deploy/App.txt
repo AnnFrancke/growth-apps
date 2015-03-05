@@ -3,11 +3,11 @@
 <head>
     <title>Artifact Growth</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Tue Mar 03 2015 16:12:19 GMT-0700 (MST) -->
+    <!--  Build Date: Thu Mar 05 2015 06:35:08 GMT-0700 (MST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Tue Mar 03 2015 16:12:19 GMT-0700 (MST)";
-        var CHECKSUM = 6889651058;
+        var APP_BUILD_DATE = "Thu Mar 05 2015 06:35:08 GMT-0700 (MST)";
+        var CHECKSUM = 12240317037;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc3/sdk.js"></script>
@@ -138,6 +138,118 @@ Ext.define('Rally.technicalservices.Logger',{
 
 });
 
+Ext.define('Rally.technicalservices.FileUtilities', {
+    singleton: true,
+    logger: new Rally.technicalservices.Logger(),
+    
+    saveTextAsFile: function(textToWrite, fileName)
+    {
+        var textFileAsBlob = new Blob([textToWrite], {type:'text/plain'});
+        var fileNameToSaveAs = fileName;
+
+        var downloadLink = document.createElement("a");
+        downloadLink.download = fileNameToSaveAs;
+        downloadLink.innerHTML = "Download File";
+        if (window.webkitURL != null)
+        {
+            // Chrome allows the link to be clicked
+            // without actually adding it to the DOM.
+            downloadLink.href = window.webkitURL.createObjectURL(textFileAsBlob);
+        }
+        else
+        {
+            // Firefox requires the link to be added to the DOM
+            // before it can be clicked.
+            downloadLink.href = window.URL.createObjectURL(textFileAsBlob);
+            downloadLink.onclick = this.destroyClickedElement;
+            downloadLink.style.display = "none";
+            document.body.appendChild(downloadLink);
+        }
+        downloadLink.click();
+    },
+    destroyClickedElement: function(event)
+    {
+        document.body.removeChild(event.target);
+    },
+    convertDataArrayToCSVText: function(data_array, requestedFieldHash){
+       
+        var text = '';
+        Ext.each(Object.keys(requestedFieldHash), function(key){
+            text += requestedFieldHash[key] + ',';
+        });
+        text = text.replace(/,$/,'\n');
+        
+        Ext.each(data_array, function(d){
+            Ext.each(Object.keys(requestedFieldHash), function(key){
+                if (d[key]){
+                    if (typeof d[key] === 'object'){
+                        if (d[key].FormattedID) {
+                            text += Ext.String.format("\"{0}\",",d[key].FormattedID ); 
+                        } else if (d[key].Name) {
+                            text += Ext.String.format("\"{0}\",",d[key].Name );                    
+                        } else if (!isNaN(Date.parse(d[key]))){
+                            text += Ext.String.format("\"{0}\",",Rally.util.DateTime.formatWithDefaultDateTime(d[key]));
+                        }else {
+                            text += Ext.String.format("\"{0}\",",d[key].toString());
+                        }
+                    } else {
+                        text += Ext.String.format("\"{0}\",",d[key] );                    
+                    }
+                } else {
+                    text += ',';
+                }
+            },this);
+            text = text.replace(/,$/,'\n');
+        },this);
+        return text;
+    }
+});
+Ext.define('Rally.technicalservices.dialog.PickerDialog',{
+    extend: 'Rally.ui.dialog.Dialog',
+    logger: new Rally.technicalservices.Logger(),
+    autoShow: true,
+    initComponent: function() {
+        this.items = this._getItems();
+        this.buttons = this._getButtonConfig();
+        this.callParent(arguments);
+        this.addEvents(
+                'itemselected'
+        );
+    },
+    _onApplyClick: function(){
+        this.fireEvent('itemselected',this);
+        this.destroy(); 
+    },
+    _onCancelClick: function() {
+        this.destroy();
+    },
+    _getItems:function(){
+        return [{
+            xtype: "container",
+            layout: {type: 'hbox'},
+        }];
+    },
+    _getButtonConfig: function() {
+        return [{
+            xtype: "rallybutton",
+            itemId: "cancelButton",
+            cls: "secondary rly-small",
+            text: "Cancel",
+            width: 90,
+            handler: this._onCancelClick,
+            scope: this
+        }, {
+            xtype: "rallybutton",
+            itemId: "applyButton",
+            cls: "primary rly-small",
+            text: "Apply",
+            width: 90,
+            handler: this._onApplyClick,
+            scope: this,
+            disabled: true 
+        }]
+    },
+});
 Ext.define('Rally.technicalservices.Toolbox',{
     singleton: true,
     getBeginningOfMonthAsDate: function(dateInMonth){
@@ -249,8 +361,13 @@ Ext.define('CustomApp', {
         value: 'week',
         dateFormat: 'M dd yyyy',
         tickInterval: 5
+    },{
+        displayName: 'Day',
+        value: 'day',
+        dateFormat: 'Y-m-d',
+        tickInterval: 30
     }],
-
+    defaultDateSubtractor: -3,
     workspaces: null,
     launch: function() {
 
@@ -290,40 +407,111 @@ Ext.define('CustomApp', {
                 filters: filter,
                  remoteFilter: true
             },
+            margin: 10,
             valueField: 'TypePath',
             displayField: 'DisplayName',
+        });
+        
+        this.down('#selector_box').add({
+            xtype: 'rallydatefield',
+            labelAlign: 'right',
+            fieldLabel: 'Start Date',
+            itemId: 'dt-start',
+            margin: 10,
+            labelWidth: 75,
+            value: Rally.util.DateTime.add(new Date(),"month",this.defaultDateSubtractor)
         });
         
         this.down('#selector_box').add({
             xtype: 'rallybutton',
             text: 'Run',
             scope: this,
+            margin: 10,
             handler: this._run
+        });
+        this.down('#selector_box').add({
+            xtype: 'rallybutton',
+            itemId: 'btn-export',
+            text: 'Export',
+            scope: this,
+            margin: 10,
+            handler: this._export,
+            disabled: true
         });
         
     },
     _run: function(){
-        var start_date = Rally.util.DateTime.add(new Date(),"month",-3); //cb.getValue());
-        var workspaces = this.workspaces.slice(15, 25); //[this.getContext().getWorkspace()];
+        var workspaces = this.workspaces; //[this.getContext().getWorkspace()];
+        
         var cb = this.down('#cb-artifact');
         var type = cb.getValue(); 
         var displayType = cb.getRecord().get(cb.displayField);
+        
         var granularity = "day";
         var dateFormat = "Y-m-d";
         var end_date = new Date();
-        
+        var start_date = this.down('#dt-start').getValue();
         var dateBuckets= Rally.technicalservices.Toolbox.getDateBuckets(start_date, end_date, granularity);
+
+        this.setLoading(true);
         this._fetchSeriesData(workspaces, type, dateBuckets, granularity).then({
             scope: this,
-            success: function(seriesData){
+            success: function(results){
+                this.logger.log('_fetchData success:', results);
+                var seriesData = [];
+                var errors = [];
+                Ext.each(results, function(obj){
+                    if (typeof obj == 'object'){
+                        seriesData.push(obj);
+                    } else {
+                        errors.push(obj);
+                    }
+                });
                 var categories = Rally.technicalservices.Toolbox.formatDateBuckets(dateBuckets, dateFormat);
-                this.logger.log('_fetchData success:', seriesData);
+                this.setLoading(false);
                 this._drawChart(seriesData, categories, displayType);
+                this._showErrors(errors);
+                this.setExportData(seriesData, categories, errors);
             },
             failure: function(data){
+                this.setLoading(false);
                 this.logger.log('_run._fetchSeriesData failed', data);
             }
         });
+    },
+    _export: function(){
+        var cb = this.down('#cb-artifact');
+        var artifact_type = cb.getValue();
+        var filename = Ext.String.format('{0}-growth-{1}.csv', artifact_type, Rally.util.DateTime.format(new Date(),'Y-m-d'));
+        if (this.exportData){
+            Rally.technicalservices.FileUtilities.saveTextAsFile(this.exportData, filename);
+        }
+    },
+    setExportData: function(seriesData, categories, errors){
+        var text = 'Workspace,';
+        
+        Ext.each(categories, function(c){
+            text += c + ',';
+        });
+        text.replace(/,$/,'\n');
+        
+        Ext.each(seriesData, function(s){
+            text += seriesData.name + ',';
+            Ext.each(s.data, function(p){
+                text += p || null;
+            });
+            text.replace(/,$/,'\n');
+        });
+        
+        Ext.each(errors, function(e){
+            text += e + '\n';
+        });
+        this.logger.log('setExportData', text);
+        this.down('btn-export').setDisabled(false);
+        this.exportData = text;  
+    },
+    _showErrors: function(errorStrings){
+        this.logger.log('_showErrors',errorStrings);
     },
     _drawChart: function(seriesData, categories, displayName){
         this.logger.log('_drawChart');
@@ -399,7 +587,7 @@ Ext.define('CustomApp', {
                deferred.resolve(data);
            }, 
            failure: function(data){
-               deferred.reject(data);
+               deferred.resolve(data);
                this.logger.log('_fetchSeriesData return failure',data);
            }
        });
@@ -411,13 +599,14 @@ Ext.define('CustomApp', {
        this._fetchTypeBaselineCountWsapi(wksp, type, dateBuckets[0]).then({
            scope: this,
            success: function(obj){
+              this.setLoading('Fetching data from ' + wksp.get('Name')); 
               this._fetchCreationDatesLookback(wksp, type, obj.maxObjectID, obj.count, dateBuckets, granularity).then({
                   scope: this,
                   success: function(obj){
                       deferred.resolve(obj);
                   },
                   failure: function(msg){
-                      deferred.reject(msg);
+                      deferred.resolve(msg);
                   }
               });  //get the baseline count
           }
@@ -441,15 +630,15 @@ Ext.define('CustomApp', {
            listeners: {
                scope: this,
                load: function(store, records, success){
-                   this.logger.log('_fetchCreationDatesLookback time(ms): ', Date.now() - start, records.length, success);
+                   this.logger.log('_fetchCreationDatesLookback time(ms): ', Date.now() - start, records, success);
                    console.log(records);
-                   if (success){
+                   if (success && records){
                        var data = this._mungeDataForWorkspace(wksp, type, baselineCount, dateBuckets, granularity, records);
                        deferred.resolve(data);
                    } else {
                        this.logger.log('_fetchCreationDatesLookback failed');
-                       var msg = 'Load creation dates failed for ' + type + ' in ' + wksp.get('Name');
-                       deferred.reject(msg);
+                       var msg = wksp.get('Name') + ', Load creation dates failed for ' + type;
+                       deferred.resolve(msg);
                    }
                }
            }
@@ -486,6 +675,7 @@ Ext.define('CustomApp', {
            });
            series_data[i]=artifact_count;  
        }
+       this.logger.log('series data', wksp.get('Name'),series_data);
        return {name: wksp.get('Name'), data: series_data, stack: 1, type: 'area'};  
        
    },

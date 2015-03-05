@@ -1,5 +1,6 @@
 #Artifact Growth
 
+Displays the 
 ## Development Notes
 
 ### First Load
