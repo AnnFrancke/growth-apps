@@ -1,3 +1,4 @@
+
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
@@ -31,17 +32,8 @@ Ext.define('CustomApp', {
         Rally.technicalservices.Toolbox.fetchWorkspaces().then({
             scope: this,
             success: function(workspaces){
-                var wksp;
-                Ext.each(workspaces, function(w){
-                    if (w.get('Name') == 'Curmudgeon'){
-                        wksp = w;  
-                        return false;  
-                    }
-                });
-                
-                
                 this.logger.log('fetchWorkspaces Success', workspaces.length);
-                this._initialize([wksp]); //workspaces);
+                this._initialize(workspaces);
             }, 
             failure: function(msg){
                 Rally.ui.notify.Notifier.showError({message: msg});
@@ -90,6 +82,13 @@ Ext.define('CustomApp', {
         
         this.down('#selector_box').add({
             xtype: 'rallybutton',
+            text: 'Workspaces...',
+            scope: this,
+            margin: 10,
+            handler: this._selectWorkspaces
+        });
+        this.down('#selector_box').add({
+            xtype: 'rallybutton',
             text: 'Run',
             scope: this,
             margin: 10,
@@ -106,6 +105,20 @@ Ext.define('CustomApp', {
         });
         
     },
+    _selectWorkspaces: function(){
+        this.logger.log('_selectWorkspaces', this.workspaces);
+        Ext.create('Rally.technicalservices.dialog.PickerDialog',{
+            records: this.workspaces,
+            displayField: 'Name',
+            listeners: {
+                scope: this,
+                itemselected: this._workspacesSelected
+            }
+        });
+    },
+    _workspacesSelected: function(records){
+        this.logger.log('_workspacesSelected', records); 
+    }, 
     _run: function(){
         var workspaces = this.workspaces; //[this.getContext().getWorkspace()];
 
@@ -302,7 +315,7 @@ Ext.define('CustomApp', {
                        deferred.resolve(data);
                    } else {
                        this.logger.log('_fetchCreationDatesLookback failed', store, records, success);
-                       var msg = wksp.get('Name') + ', load dates failed for ' + type + '; success=' + success + ', records is null ' + (records == null);
+                       var msg = wksp.get('Name') + ', load dates failed for ' + type;
                        console.log(msg);
                        deferred.resolve(msg);
                    }

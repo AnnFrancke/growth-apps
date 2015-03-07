@@ -3,10 +3,10 @@
 <head>
     <title>Artifact Growth</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Thu Mar 05 2015 09:12:57 GMT-0700 (MST) -->
+    <!--  Build Date: Fri Mar 06 2015 17:24:31 GMT-0700 (MST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Thu Mar 05 2015 09:12:57 GMT-0700 (MST)";
+        var APP_BUILD_DATE = "Fri Mar 06 2015 17:24:31 GMT-0700 (MST)";
         var CHECKSUM = [%= checksum %];
     </script>
     
@@ -204,20 +204,124 @@ Ext.define('Rally.technicalservices.FileUtilities', {
         return text;
     }
 });
+Ext.override(Ext.data.proxy.Server, {
+    timeout : 300000,
+    processResponse: function(success, operation, request, response, callback, scope) {
+        var me = this,
+            reader,
+            result;
+
+        if (success === true) {
+            reader = me.getReader();
+            reader.applyDefaults = operation.action === 'read';
+            result = reader.read(me.extractResponseData(response));
+
+            if (result.success !== false) {
+                
+                Ext.apply(operation, {
+                    response: response,
+                    resultSet: result
+                });
+
+                operation.commitRecords(result.records);
+                operation.setCompleted();
+                operation.setSuccessful();
+            } else {
+                operation.setException(result.message);
+                me.fireEvent('exception', this, response, operation);
+            }
+        } else {
+            if (response) {
+                me.setException(operation, response);
+            }
+            me.fireEvent('exception', this, response, operation);
+        }
+
+        
+        if (typeof callback == 'function') {
+            callback.call(scope || me, operation);
+        }
+
+        me.afterRequest(request, success);
+    }
+});
 Ext.define('Rally.technicalservices.dialog.PickerDialog',{
     extend: 'Rally.ui.dialog.Dialog',
     logger: new Rally.technicalservices.Logger(),
     autoShow: true,
+    draggable: true,
+    width: 400,
+    height: 400,
+    config:{
+        records: null,
+        title: 'Select Workspace',
+        displayFields: ['Name'],
+        sortField: 'Name',
+        sortDirection: 'ASC',
+        filterField: 'Name'
+    },
+    constructor: function(config){
+        Ext.apply(this.config,config); 
+        this.callParent(arguments);
+    },
     initComponent: function() {
+        this.title = this.getTitle();
         this.items = this._getItems();
         this.buttons = this._getButtonConfig();
         this.callParent(arguments);
-        this.addEvents(
-                'itemselected'
-        );
+        this.addEvents('itemselected');
+        this._addItemGrid(this.config.records, this.displayField);
+    },
+    _getItemCtHeight: function(){
+        return this.height - 150;
+    },
+    _addItemGrid: function(){
+        
+        var page_size = this.getRecords().length + 1; 
+        var store = Ext.create('Rally.data.custom.Store',{
+            data: this.getRecords(),
+            remoteSort: false,
+            remoteFilter: false,
+            pageSize: page_size,
+            sorters: [{
+                property: this.sortField,
+                direction: this.sortDirection
+            }]
+        });
+
+        var column_cfgs = [];
+        Ext.each(this.displayFields, function(f){
+            column_cfgs.push({
+                text: f,
+                dataIndex: f,
+                flex: 1
+            });
+        });
+        
+        this.logger.log('_addItemGrid', store);
+        this.down('#item_box').add({
+            xtype: 'rallygrid',
+            store: store,
+            itemId: 'ct-item',
+            height: this._getItemCtHeight(),
+            width: this._getItemCtWidth(),
+            margin: 15,
+            showRowActionsColumn: false,
+            selType: 'checkboxmodel',
+            selModel: {
+                injectCheckbox: 0,
+                mode: 'MULTI'
+            },
+            columnCfgs: column_cfgs,
+            showPagingToolbar: false
+        });
+    },
+    _getItemCtWidth: function(){
+        return this.width - 30;
     },
     _onApplyClick: function(){
-        this.fireEvent('itemselected',this);
+        var selected_records = this.down('#ct-item').getSelectionModel().getSelection();
+        this.fireEvent('itemselected',selected_records);
         this.destroy(); 
     },
     _onCancelClick: function() {
@@ -227,7 +331,39 @@ Ext.define('Rally.technicalservices.dialog.PickerDialog',{
         return [{
             xtype: "container",
             layout: {type: 'hbox'},
+            items: [{
+                xtype: 'rallytextfield',
+                itemId: 'txt-find',
+                fieldLabel: 'Filter',
+                labelAlign: 'right',
+                labelWidth: 50,
+                width: this._getItemCtWidth(),
+                margin: 10,
+                height: 21,
+                listeners: {
+                    scope: this,
+                    change: this._onFindUpdated
+                }
+            }]
+        },{
+            xtype: "container",
+            itemId: 'item_box'
         }];
+    },
+    _onFindUpdated: function(txt){
+        var grid = this.down('#ct-item');
+        var filterValue = txt.getValue();
+        var filterField = this.filterField;
+        var regex = new RegExp(filterValue, "gi");
+        var filter = Ext.create('Ext.util.Filter',{
+            filterFn: function(item) {
+                return regex.test(item.get(filterField));
+            }
+        });
+        
+        grid.getStore().filterBy(function(item){
+            return regex.test(item.get(filterField));
+        });
     },
     _getButtonConfig: function() {
         return [{
@@ -246,9 +382,8 @@ Ext.define('Rally.technicalservices.dialog.PickerDialog',{
             width: 90,
             handler: this._onApplyClick,
             scope: this,
-            disabled: true 
         }]
-    },
+    }
 });
 Ext.define('Rally.technicalservices.Toolbox',{
     singleton: true,
@@ -332,6 +467,7 @@ Ext.define('Rally.technicalservices.Toolbox',{
                                         var summaryInfo = record.get('Summary').Projects;
                                         var open_project_count = summaryInfo.State['Open'];
                                         if (record.get('State') == 'Open' && open_project_count > 0){
+                                            record.set("id", record["ObjectID"]);
                                             workspaces.push(record);    
                                         }
                                     },this);
@@ -351,6 +487,7 @@ Ext.define('Rally.technicalservices.Toolbox',{
         return deferred;  
     }
 });
+
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
@@ -384,17 +521,8 @@ Ext.define('CustomApp', {
         Rally.technicalservices.Toolbox.fetchWorkspaces().then({
             scope: this,
             success: function(workspaces){
-                var wksp;
-                Ext.each(workspaces, function(w){
-                    if (w.get('Name') == 'Curmudgeon'){
-                        wksp = w;  
-                        return false;  
-                    }
-                });
-                
-                
                 this.logger.log('fetchWorkspaces Success', workspaces.length);
-                this._initialize([wksp]); //workspaces);
+                this._initialize(workspaces);
             }, 
             failure: function(msg){
                 Rally.ui.notify.Notifier.showError({message: msg});
@@ -443,6 +571,13 @@ Ext.define('CustomApp', {
         
         this.down('#selector_box').add({
             xtype: 'rallybutton',
+            text: 'Workspaces...',
+            scope: this,
+            margin: 10,
+            handler: this._selectWorkspaces
+        });
+        this.down('#selector_box').add({
+            xtype: 'rallybutton',
             text: 'Run',
             scope: this,
             margin: 10,
@@ -459,6 +594,20 @@ Ext.define('CustomApp', {
         });
         
     },
+    _selectWorkspaces: function(){
+        this.logger.log('_selectWorkspaces', this.workspaces);
+        Ext.create('Rally.technicalservices.dialog.PickerDialog',{
+            records: this.workspaces,
+            displayField: 'Name',
+            listeners: {
+                scope: this,
+                itemselected: this._workspacesSelected
+            }
+        });
+    },
+    _workspacesSelected: function(records){
+        this.logger.log('_workspacesSelected', records); 
+    }, 
     _run: function(){
         var workspaces = this.workspaces; //[this.getContext().getWorkspace()];
 
@@ -655,7 +804,7 @@ Ext.define('CustomApp', {
                        deferred.resolve(data);
                    } else {
                        this.logger.log('_fetchCreationDatesLookback failed', store, records, success);
-                       var msg = wksp.get('Name') + ', load dates failed for ' + type + '; success=' + success + ', records is null ' + (records == null);
+                       var msg = wksp.get('Name') + ', load dates failed for ' + type;
                        console.log(msg);
                        deferred.resolve(msg);
                    }

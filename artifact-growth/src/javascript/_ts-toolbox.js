@@ -80,6 +80,7 @@ Ext.define('Rally.technicalservices.Toolbox',{
                                         var summaryInfo = record.get('Summary').Projects;
                                         var open_project_count = summaryInfo.State['Open'];
                                         if (record.get('State') == 'Open' && open_project_count > 0){
+                                            record.set("id", record["ObjectID"]);
                                             workspaces.push(record);    
                                         }
                                     },this);
