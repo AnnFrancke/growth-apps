@@ -27,6 +27,7 @@ Ext.define('CustomApp', {
     }],
     defaultDateSubtractor: -3,
     workspaces: null,
+    selectedWorkspaces: null, 
     launch: function() {
 
         Rally.technicalservices.Toolbox.fetchWorkspaces().then({
@@ -42,6 +43,7 @@ Ext.define('CustomApp', {
     },
     _initialize: function(workspaces){
         this.workspaces = workspaces; 
+        this.selectedWorkspaces = [this.getContext().getWorkspace()];
         
         var types = ['Defect','HierarchicalRequirement','Task','PortfolioItem'];
         var filter = Ext.create('Rally.data.wsapi.Filter', {
@@ -109,6 +111,7 @@ Ext.define('CustomApp', {
         this.logger.log('_selectWorkspaces', this.workspaces);
         Ext.create('Rally.technicalservices.dialog.PickerDialog',{
             records: this.workspaces,
+            selectedRecords: this.selectedWorkspaces,
             displayField: 'Name',
             listeners: {
                 scope: this,
@@ -118,10 +121,12 @@ Ext.define('CustomApp', {
     },
     _workspacesSelected: function(records){
         this.logger.log('_workspacesSelected', records); 
+        this.selectedWorkspaces = records; 
+        this._run();
     }, 
     _run: function(){
-        var workspaces = this.workspaces; //[this.getContext().getWorkspace()];
-
+        var workspaces = this.selectedWorkspaces || [this.getContext().getWorkspace()];
+        
         var cb = this.down('#cb-artifact');
         var type = cb.getValue(); 
         var displayType = cb.getRecord().get(cb.displayField);
@@ -275,10 +280,11 @@ Ext.define('CustomApp', {
    },
    _fetchWorkspaceData: function(wksp, type,  dateBuckets, granularity){
        var deferred = Ext.create('Deft.Deferred');
+       var wkspName = wksp.Name || wksp.get('Name');
        this._fetchTypeBaselineCountWsapi(wksp, type, dateBuckets[0]).then({
            scope: this,
            success: function(obj){
-              this.setLoading('Fetching data from ' + wksp.get('Name')); 
+              this.setLoading('Fetching data from ' + wkspName); 
               this._fetchCreationDatesLookback(wksp, type, obj.maxObjectID, obj.count, dateBuckets, granularity).then({
                   scope: this,
                   success: function(obj){
@@ -295,11 +301,12 @@ Ext.define('CustomApp', {
    _fetchCreationDatesLookback: function(wksp, type, objectID, baselineCount, dateBuckets, granularity){
        this.logger.log('_fetchCreationDatesLookback',wksp, type, objectID, baselineCount);
        var deferred = Ext.create('Deft.Deferred');
-       
+       var wkspRef = wksp._ref || wksp.get('_ref');
+       var wkspName = wksp.Name || wksp.get('Name');
        var start = Date.now();
        Ext.create('Rally.data.lookback.SnapshotStore',{
            autoLoad: true,
-           context: {workspace: wksp.get('_ref')},
+           context: {workspace: wkspRef},
            find: {
                "_TypeHierarchy": type,
                "ObjectID": {$gt: objectID},
@@ -315,8 +322,7 @@ Ext.define('CustomApp', {
                        deferred.resolve(data);
                    } else {
                        this.logger.log('_fetchCreationDatesLookback failed', store, records, success);
-                       var msg = wksp.get('Name') + ', load dates failed for ' + type;
-                       console.log(msg);
+                       var msg = wkspName + ', load dates failed for ' + type;
                        deferred.resolve(msg);
                    }
                }
@@ -354,20 +360,22 @@ Ext.define('CustomApp', {
            });
            series_data[i]=artifact_count;  
        }
-       this.logger.log('series data', wksp.get('Name'),series_data);
-       return {name: wksp.get('Name'), data: series_data, stack: 1, type: 'area'};  
+       var wkspName = wksp.Name || wksp.get('Name');
+       this.logger.log('series data', wkspName,series_data);
+       return {name: wkspName, data: series_data, stack: 1, type: 'area'};  
        
    },
    _fetchTypeBaselineCountWsapi: function(wksp, type, beforeDate){
        var deferred = Ext.create('Deft.Deferred');
-
+       var wkspRef = wksp._ref || wksp.get('_ref');
+       var wkspName = wksp.Name || wksp.get('Name');
        this.logger.log('_fetchTypeBaselineCountWsapi', type, beforeDate);
        var start = Date.now();
        
        Ext.create('Rally.data.wsapi.Store',{
            model: type,
            fetch: ['ObjectID'],
-           context: {workspace: wksp.get('_ref'), project: null},
+           context: {workspace: wkspRef, project: null},
            filters: {
                property: 'CreationDate',
                operator: '<',
@@ -392,7 +400,7 @@ Ext.define('CustomApp', {
                       }
                       deferred.resolve({count: store.getTotalCount(), maxObjectID: object_id});
                    } else {
-                       deferred.reject('_fetchTypeBaselineCountWsapi load failed for ' + type + ' in workspace ' + wksp.get('Name'));
+                       deferred.reject('_fetchTypeBaselineCountWsapi load failed for ' + type + ' in workspace ' + wkspName);
                    }
                }
            }

@@ -31,8 +31,9 @@ Ext.define('Rally.technicalservices.dialog.PickerDialog',{
     _addItemGrid: function(){
         
         var page_size = this.getRecords().length + 1; 
+        var data = _.map(this.getRecords(), function(r){return r.getData()});
         var store = Ext.create('Rally.data.custom.Store',{
-            data: this.getRecords(),
+            data: data,
             remoteSort: false,
             remoteFilter: false,
             pageSize: page_size,
@@ -68,6 +69,10 @@ Ext.define('Rally.technicalservices.dialog.PickerDialog',{
             columnCfgs: column_cfgs,
             showPagingToolbar: false
         });
+        
+        //select the records
+        var records = this.records || [];
+        this.down('#ct-item').getSelectionModel().select(records);
     },
     _getItemCtWidth: function(){
         return this.width - 30;
@@ -82,23 +87,23 @@ Ext.define('Rally.technicalservices.dialog.PickerDialog',{
     },
     _getItems:function(){
         return [{
-            xtype: "container",
-            layout: {type: 'hbox'},
-            items: [{
-                xtype: 'rallytextfield',
-                itemId: 'txt-find',
-                fieldLabel: 'Filter',
-                labelAlign: 'right',
-                labelWidth: 50,
-                width: this._getItemCtWidth(),
-                margin: 10,
-                height: 21,
-                listeners: {
-                    scope: this,
-                    change: this._onFindUpdated
-                }
-            }]
-        },{
+//            xtype: "container",
+//            layout: {type: 'hbox'},
+//            items: [{
+//                xtype: 'rallytextfield',
+//                itemId: 'txt-find',
+//                fieldLabel: 'Filter',
+//                labelAlign: 'right',
+//                labelWidth: 50,
+//                width: this._getItemCtWidth(),
+//                margin: 10,
+//                height: 21,
+//                listeners: {
+//                    scope: this,
+//                    change: this._onFindUpdated
+//                }
+//            }]
+//        },{
             xtype: "container",
             itemId: 'item_box'
         }];
@@ -108,12 +113,6 @@ Ext.define('Rally.technicalservices.dialog.PickerDialog',{
         var filterValue = txt.getValue();
         var filterField = this.filterField;
         var regex = new RegExp(filterValue, "gi");
-        var filter = Ext.create('Ext.util.Filter',{
-            filterFn: function(item) {
-                return regex.test(item.get(filterField));
-            }
-        });
-        
         grid.getStore().filterBy(function(item){
             return regex.test(item.get(filterField));
         });
