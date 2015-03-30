@@ -81,7 +81,17 @@ Ext.define('CustomApp', {
             labelWidth: 75,
             value: Rally.util.DateTime.add(new Date(),"month",this.defaultDateSubtractor)
         });
-        
+
+        this.down('#selector_box').add({
+            xtype: 'rallydatefield',
+            labelAlign: 'right',
+            fieldLabel: 'End Date',
+            itemId: 'dt-end',
+            margin: 10,
+            labelWidth: 75,
+            value: new Date()
+        });
+
         this.down('#selector_box').add({
             xtype: 'rallybutton',
             text: 'Workspaces...',
@@ -133,12 +143,12 @@ Ext.define('CustomApp', {
         
         var granularity = "month";
         var dateFormat = "M yyyy";
-        var end_date = new Date();
         var start_date = this.down('#dt-start').getValue();
+        var end_date = this.down('#dt-end').getValue();
         var dateBuckets= Rally.technicalservices.Toolbox.getDateBuckets(start_date, end_date, granularity);
 
         this.setLoading(true);
-        this._fetchSeriesData(workspaces, type, dateBuckets, granularity).then({
+        this._fetchSeriesData(workspaces, type, dateBuckets, granularity,end_date).then({
             scope: this,
             success: function(results){
                 this.logger.log('_fetchData success:', results);
@@ -235,7 +245,7 @@ Ext.define('CustomApp', {
                     {
                         title: {
                             text: 'Number of Artifacts'
-                        },
+                        }
                     }
                 ],
                 plotOptions: {
@@ -244,24 +254,22 @@ Ext.define('CustomApp', {
                             format: '{point.y:.1f}%'
                         },
                         marker: {
-                            enabled: false,
-                        },
+                            enabled: false
+                        }
                     }
                 }
             }
         });        
     },
 
-   _fetchSeriesData: function(workspaces, type, dateBuckets, granularity){
+   _fetchSeriesData: function(workspaces, type, dateBuckets, granularity, endDate){
        var deferred = Ext.create('Deft.Deferred');
        
        var promises = [];  
-       var end_date = new Date();
-       
        this.logger.log('_fetchSeriesData');
        
        Ext.each(workspaces, function(wksp){ 
-           promises.push(this._fetchWorkspaceData(wksp, type, dateBuckets, granularity));
+           promises.push(this._fetchWorkspaceData(wksp, type, dateBuckets, granularity, endDate));
        },this);
        
        Deft.Promise.all(promises).then({
@@ -278,14 +286,14 @@ Ext.define('CustomApp', {
        
        return deferred;
    },
-   _fetchWorkspaceData: function(wksp, type,  dateBuckets, granularity){
+   _fetchWorkspaceData: function(wksp, type,  dateBuckets, granularity, endDate){
        var deferred = Ext.create('Deft.Deferred');
        var wkspName = wksp.Name || wksp.get('Name');
        this._fetchTypeBaselineCountWsapi(wksp, type, dateBuckets[0]).then({
            scope: this,
            success: function(obj){
               this.setLoading('Fetching data from ' + wkspName); 
-              this._fetchCreationDatesLookback(wksp, type, obj.maxObjectID, obj.count, dateBuckets, granularity).then({
+              this._fetchCreationDatesLookback(wksp, type, obj.maxObjectID, obj.count, dateBuckets, granularity, endDate).then({
                   scope: this,
                   success: function(obj){
                       deferred.resolve(obj);
@@ -298,19 +306,20 @@ Ext.define('CustomApp', {
        });
        return deferred;  
    },
-   _fetchCreationDatesLookback: function(wksp, type, objectID, baselineCount, dateBuckets, granularity){
-       this.logger.log('_fetchCreationDatesLookback',wksp, type, objectID, baselineCount);
+   _fetchCreationDatesLookback: function(wksp, type, objectID, baselineCount, dateBuckets, granularity, endDate){
+       this.logger.log('_fetchCreationDatesLookback',wksp, type, objectID, baselineCount, endDate);
        var deferred = Ext.create('Deft.Deferred');
        var wkspRef = wksp._ref || wksp.get('_ref');
        var wkspName = wksp.Name || wksp.get('Name');
        var start = Date.now();
+       var atDate = Rally.util.DateTime.toIsoString(endDate);
        Ext.create('Rally.data.lookback.SnapshotStore',{
            autoLoad: true,
            context: {workspace: wkspRef},
            find: {
                "_TypeHierarchy": type,
                "ObjectID": {$gt: objectID},
-               "__At": "current"
+               "__At": atDate //"current"
            },
            fetch: ["CreationDate"],
            listeners: {
