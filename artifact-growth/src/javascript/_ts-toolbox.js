@@ -54,7 +54,7 @@ Ext.define('Rally.technicalservices.Toolbox',{
             Ext.each(buckets, function(bucket){
                 categories.push(Rally.util.DateTime.format(bucket,dateFormat));
             });
-            categories[categories.length-1] += "*"; 
+           // categories[categories.length-1] += "*";
             return categories; 
     },
     fetchWorkspaces: function(){

@@ -131,8 +131,8 @@ Ext.define('CustomApp', {
         var type = cb.getValue(); 
         var displayType = cb.getRecord().get(cb.displayField);
         
-        var granularity = "day";
-        var dateFormat = "Y-m-d";
+        var granularity = "month";
+        var dateFormat = "M yyyy";
         var end_date = new Date();
         var start_date = this.down('#dt-start').getValue();
         var dateBuckets= Rally.technicalservices.Toolbox.getDateBuckets(start_date, end_date, granularity);
@@ -207,7 +207,7 @@ Ext.define('CustomApp', {
         }
 
         var title_text = Ext.String.format('{0} growth',displayName);
-        var tick_interval = 5;  
+        var tick_interval = 1;
         
         this.down('#display_box').add({
             xtype: 'rallychart',
