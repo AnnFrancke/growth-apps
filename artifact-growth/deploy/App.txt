@@ -3,11 +3,11 @@
 <head>
     <title>Artifact Growth</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Mon Mar 30 2015 14:22:54 GMT-0600 (MDT) -->
+    <!--  Build Date: Mon Mar 30 2015 14:50:56 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Mon Mar 30 2015 14:22:54 GMT-0600 (MDT)";
-        var CHECKSUM = 23584014698;
+        var APP_BUILD_DATE = "Mon Mar 30 2015 14:50:56 GMT-0600 (MDT)";
+        var CHECKSUM = 23943709644;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc3/sdk.js"></script>
@@ -633,6 +633,9 @@ Ext.define('CustomApp', {
             margin: 10,
             valueField: 'TypePath',
             displayField: 'DisplayName',
+            stateful: true,
+            stateId: 'cb-artifact',
+            stateEvents: ['change']
         });
         
         this.down('#selector_box').add({
@@ -642,7 +645,10 @@ Ext.define('CustomApp', {
             itemId: 'dt-start',
             margin: 10,
             labelWidth: 75,
-            value: Rally.util.DateTime.add(new Date(),"month",this.defaultDateSubtractor)
+            value: Rally.util.DateTime.add(new Date(),"month",this.defaultDateSubtractor),
+            stateful: true,
+            stateId: 'dt-start',
+            stateEvents: ['change']
         });
 
         this.down('#selector_box').add({
@@ -653,6 +659,9 @@ Ext.define('CustomApp', {
             margin: 10,
             labelWidth: 75,
             value: new Date()
+            //stateful: true,
+            //stateId: 'dt-end',
+            //stateEvents: ['change']
         });
 
         this.down('#selector_box').add({

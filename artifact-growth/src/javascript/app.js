@@ -70,6 +70,9 @@ Ext.define('CustomApp', {
             margin: 10,
             valueField: 'TypePath',
             displayField: 'DisplayName',
+            stateful: true,
+            stateId: 'cb-artifact',
+            stateEvents: ['change']
         });
         
         this.down('#selector_box').add({
@@ -79,7 +82,10 @@ Ext.define('CustomApp', {
             itemId: 'dt-start',
             margin: 10,
             labelWidth: 75,
-            value: Rally.util.DateTime.add(new Date(),"month",this.defaultDateSubtractor)
+            value: Rally.util.DateTime.add(new Date(),"month",this.defaultDateSubtractor),
+            stateful: true,
+            stateId: 'dt-start',
+            stateEvents: ['change']
         });
 
         this.down('#selector_box').add({
@@ -90,6 +96,9 @@ Ext.define('CustomApp', {
             margin: 10,
             labelWidth: 75,
             value: new Date()
+            //stateful: true,
+            //stateId: 'dt-end',
+            //stateEvents: ['change']
         });
 
         this.down('#selector_box').add({
