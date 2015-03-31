@@ -9,6 +9,8 @@ Ext.define('CustomApp', {
         {xtype:'container',itemId:'display_box'},
         {xtype:'tsinfolink'}
     ],
+    stateful: true,
+    stateId: 'appState', //this.getContext().getScopedStateId('appState'),
     granularityStore: [{
         displayName: 'Month',
         value: 'month',
@@ -27,7 +29,8 @@ Ext.define('CustomApp', {
     }],
     defaultDateSubtractor: -3,
     workspaces: null,
-    selectedWorkspaces: null, 
+    selectedWorkspaces: null,
+    selectedWorkspaceOids: [],
     launch: function() {
 
         Rally.technicalservices.Toolbox.fetchWorkspaces().then({
@@ -41,9 +44,30 @@ Ext.define('CustomApp', {
             }
         });
     },
+    _getSelectedWorkspaceObjects: function(){
+        var selectedWorkspaces = [];
+        var currentWorkspace = null;
+        if (this.selectedWorkspaceOids.length > 0){
+            Ext.each(this.workspaces, function(wksp){
+                if (Ext.Array.contains(this.selectedWorkspaceOids,wksp.get('ObjectID'))){
+                    selectedWorkspaces.push(wksp);
+                }
+                if (wksp.get('ObjectID') == this.getContext().getWorkspace().ObjectID){
+                    currentWorkspace = wksp;
+                }
+            }, this);
+        }
+        this.logger.log('_getSelectedWorkspaceObjects',this.selectedWorkspaceOids, selectedWorkspaces);
+        if (selectedWorkspaces.length > 0) {
+            return [currentWorkspace];
+        }
+
+        return [this.getContext().getWorkspace()];
+
+    },
     _initialize: function(workspaces){
         this.workspaces = workspaces; 
-        this.selectedWorkspaces = [this.getContext().getWorkspace()];
+        this.selectedWorkspaces = this._getSelectedWorkspaceObjects();
         
         var types = ['Defect','HierarchicalRequirement','Task','PortfolioItem'];
         var filter = Ext.create('Rally.data.wsapi.Filter', {
@@ -71,7 +95,7 @@ Ext.define('CustomApp', {
             valueField: 'TypePath',
             displayField: 'DisplayName',
             stateful: true,
-            stateId: 'cb-artifact',
+            stateId: this.getContext().getScopedStateId('artifactType'),
             stateEvents: ['change']
         });
         
@@ -82,10 +106,10 @@ Ext.define('CustomApp', {
             itemId: 'dt-start',
             margin: 10,
             labelWidth: 75,
-            value: Rally.util.DateTime.add(new Date(),"month",this.defaultDateSubtractor),
-            stateful: true,
-            stateId: 'dt-start',
-            stateEvents: ['change']
+            value: Rally.util.DateTime.add(new Date(),"month",this.defaultDateSubtractor)
+            //stateful: true,
+            //stateId: this.getContext().getScopedStateId('startDate'),
+            //stateEvents: ['change']
         });
 
         this.down('#selector_box').add({
@@ -138,9 +162,45 @@ Ext.define('CustomApp', {
             }
         });
     },
+    /**
+     * Gets the current state of the object. By default this function returns null,
+     * it should be overridden in subclasses to implement methods for getting the state.
+     * @return {Object} The current state
+     */
+    getState: function(){
+        this.logger.log('getState');
+        var workspaceOids = _.map(this.selectedWorkspaces, function(w){
+            return w.ObjectID || w.get('ObjectID');
+        });
+        return{
+            selectedWorkspaceOids: workspaceOids
+        };
+    },
+
+    /**
+     * Applies the state to the object. This should be overridden in subclasses to do
+     * more complex state operations. By default it applies the state properties onto
+     * the current object.
+     * @param {Object} state The state
+     */
+    applyState: function(state){
+        if (state && state.selectedWorkspaceOids && state.selectedWorkspaceOids.length > 0) {
+            this.selectedWorkspaceOids = state.selectedWorkspaceOids;
+            //Ext.apply(this, state);
+        }
+        this.logger.log('applyState', state, this.selectedWorkspaceOids);
+    },
+
     _workspacesSelected: function(records){
         this.logger.log('_workspacesSelected', records); 
-        this.selectedWorkspaces = records; 
+        if (records.length > 0){
+            this.selectedWorkspaces = records;
+        } else {
+            this.selectedWorkspaces = [this.getContext().getWorkspace()];
+        }
+
+        //Save selected workspaces
+        this.saveState();
         this._run();
     }, 
     _run: function(){
@@ -187,7 +247,7 @@ Ext.define('CustomApp', {
         var artifact_type = cb.getValue();
         var filename = Ext.String.format('{0}-growth-{1}.csv', artifact_type, Rally.util.DateTime.format(new Date(),'Y-m-d'));
         if (this.exportData){
-            Rally.technicalservices.FileUtilities.saveTextAsFile(this.exportData, filename);
+            Rally.technicalservices.FileUtilities.saveCSVtoFile(this.exportData, filename);
         }
     },
     setExportData: function(seriesData, categories, errors){

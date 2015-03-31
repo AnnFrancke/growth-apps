@@ -6,7 +6,7 @@ If no workspaces are selected, the artifact growth for the default workspace for
 
 The artifact count includes current artifact counts.  
 
-The growth numbers are cumulative over time and grouped by day.  
+The growth numbers are cumulative over time and grouped by month.  If the end date falls before the end of the month, the number of artifacts at the end of the month will equal the number of artifacts on the end date, not the end of the month.
 
 This app uses both the WSAPI and LBAPI apis to query for data.   
 
