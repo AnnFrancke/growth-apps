@@ -77,17 +77,22 @@ Ext.define('Rally.technicalservices.dialog.PickerDialog',{
             //    injectCheckbox: 0,
             //    mode: 'MULTI'
             //},
-            columnCfgs: column_cfgs,
+             columnCfgs: column_cfgs,
             showPagingToolbar: false
         });
-        console.log('test',this.getSelectedRecords());
-        selModel.select(this.getSelectedRecords());
-        console.log(grid.getSelectionModel());
+        grid.on('beforerender',function(grid){
+            console.log('load',grid);
+            //var record = store.getAt(1);
+            grid.getSelectionModel().select(this.getSelectedRecords());
+            console.log('selModel',grid.getSelectionModel());
+
+        },this, {single: true});
     },
     _getItemCtWidth: function(){
         return this.width - 30;
     },
     _onApplyClick: function(){
+        console.log('apply',this.down('#ct-item').getSelectionModel());
         var selected_records = this.down('#ct-item').getSelectionModel().getSelection();
         this.fireEvent('itemselected',selected_records);
         this.destroy(); 
@@ -143,7 +148,7 @@ Ext.define('Rally.technicalservices.dialog.PickerDialog',{
             text: "Apply",
             width: 90,
             handler: this._onApplyClick,
-            scope: this,
+            scope: this
         }]
     }
 });

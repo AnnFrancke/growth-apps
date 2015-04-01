@@ -10,7 +10,7 @@ Ext.define('CustomApp', {
         {xtype:'tsinfolink'}
     ],
     stateful: true,
-    stateId: 'appState', //this.getContext().getScopedStateId('appState'),
+    stateId: 'artifactGrowthAppState', //this.getContext().getScopedStateId('appState'),
     granularityStore: [{
         displayName: 'Month',
         value: 'month',
@@ -44,6 +44,17 @@ Ext.define('CustomApp', {
             }
         });
     },
+    _getCurrentWorkspaceRecord: function(){
+        var currentWorkspaceOid = this.getContext().getWorkspace().ObjectID;
+        var record = this.workspaces[0];
+        Ext.each(this.workspaces, function(workspace){
+            if (workspace.get('ObjectID') == currentWorkspaceOid){
+                record = workspace;
+                return false;
+            }
+        });
+        return record;
+    },
     _getSelectedWorkspaceObjects: function(){
         var selectedWorkspaces = [];
         var currentWorkspace = null;
@@ -59,11 +70,10 @@ Ext.define('CustomApp', {
         }
         this.logger.log('_getSelectedWorkspaceObjects',this.selectedWorkspaceOids, selectedWorkspaces);
         if (selectedWorkspaces.length > 0) {
-            return [currentWorkspace];
+            return selectedWorkspaces;
         }
-
-        return [this.getContext().getWorkspace()];
-
+        currentWorkspace = currentWorkspace || this._getCurrentWorkspaceRecord();
+        return [currentWorkspace];
     },
     _initialize: function(workspaces){
         this.workspaces = workspaces; 
@@ -247,7 +257,7 @@ Ext.define('CustomApp', {
         var artifact_type = cb.getValue();
         var filename = Ext.String.format('{0}-growth-{1}.csv', artifact_type, Rally.util.DateTime.format(new Date(),'Y-m-d'));
         if (this.exportData){
-            Rally.technicalservices.FileUtilities.saveCSVtoFile(this.exportData, filename);
+            Rally.technicalservices.FileUtilities.saveCSVToFile(this.exportData, filename);
         }
     },
     setExportData: function(seriesData, categories, errors){

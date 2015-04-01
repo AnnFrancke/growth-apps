@@ -1,48 +1,48 @@
-Ext.override(Ext.selection.Model,{
-    doMultiSelect: function(records, keepExisting, suppressEvent) {
-        var me = this,
-            selected = me.selected,
-            change = false,
-            result, i, len, record, commit;
-
-        console.log('domultieselect',records, keepExisting, suppressEvent);
-        if (me.locked) {
-            return;
-        }
-        console.log('doMultiSelect',records);
-        records = !Ext.isArray(records) ? [records] : records;
-        len = records.length;
-        if (!keepExisting && selected.getCount() > 0) {
-            result = me.deselectDuringSelect(records, selected.getRange(), suppressEvent);
-            if (result[0]) {
-                // We had a failure during seletion, so jump out
-                // Fire selection change if we did deselect anything
-                me.maybeFireSelectionChange(result[1] > 0 && !suppressEvent);
-                return;
-            }
-        }
-
-        commit = function() {
-            selected.add(record);
-            change = true;
-        };
-
-        for (i = 0; i < len; i++) {
-            record = records[i];
-            if (me.isSelected(record)) {
-                continue;
-            }
-            me.lastSelected = record;
-
-            me.onSelectChange(record, true, suppressEvent, commit);
-        }
-        if (!me.preventFocus) {
-            me.setLastFocused(record, suppressEvent);
-        }
-        // fire selchange if there was a change and there is no suppressEvent flag
-        me.maybeFireSelectionChange(change && !suppressEvent);
-    }
-});
+//Ext.override(Ext.selection.Model,{
+//    doMultiSelect: function(records, keepExisting, suppressEvent) {
+//        var me = this,
+//            selected = me.selected,
+//            change = false,
+//            result, i, len, record, commit;
+//
+//        console.log('domultieselect',records, keepExisting, suppressEvent);
+//        if (me.locked) {
+//            return;
+//        }
+//        console.log('doMultiSelect',records);
+//        records = !Ext.isArray(records) ? [records] : records;
+//        len = records.length;
+//        if (!keepExisting && selected.getCount() > 0) {
+//            result = me.deselectDuringSelect(records, selected.getRange(), suppressEvent);
+//            if (result[0]) {
+//                // We had a failure during seletion, so jump out
+//                // Fire selection change if we did deselect anything
+//                me.maybeFireSelectionChange(result[1] > 0 && !suppressEvent);
+//                return;
+//            }
+//        }
+//
+//        commit = function() {
+//            selected.add(record);
+//            change = true;
+//        };
+//
+//        for (i = 0; i < len; i++) {
+//            record = records[i];
+//            if (me.isSelected(record)) {
+//                continue;
+//            }
+//            me.lastSelected = record;
+//
+//            me.onSelectChange(record, true, suppressEvent, commit);
+//        }
+//        if (!me.preventFocus) {
+//            me.setLastFocused(record, suppressEvent);
+//        }
+//        // fire selchange if there was a change and there is no suppressEvent flag
+//        me.maybeFireSelectionChange(change && !suppressEvent);
+//    }
+//});
 Ext.override(Ext.data.proxy.Server, {
     timeout : 300000,
     processResponse: function(success, operation, request, response, callback, scope) {
