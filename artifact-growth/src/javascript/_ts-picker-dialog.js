@@ -6,6 +6,7 @@ Ext.define('Rally.technicalservices.dialog.PickerDialog',{
     width: 400,
     height: 400,
     config:{
+        selectedRecords: null,
         records: null,
         title: 'Select Workspace',
         displayFields: ['Name'],
@@ -34,6 +35,7 @@ Ext.define('Rally.technicalservices.dialog.PickerDialog',{
         var data = _.map(this.getRecords(), function(r){return r.getData()});
         var store = Ext.create('Rally.data.custom.Store',{
             data: data,
+            autoLoad: true,
             remoteSort: false,
             remoteFilter: false,
             pageSize: page_size,
@@ -43,6 +45,7 @@ Ext.define('Rally.technicalservices.dialog.PickerDialog',{
             }]
         });
 
+
         var column_cfgs = [];
         Ext.each(this.displayFields, function(f){
             column_cfgs.push({
@@ -51,9 +54,16 @@ Ext.define('Rally.technicalservices.dialog.PickerDialog',{
                 flex: 1
             });
         });
-        
+
+        var selModel = Ext.create('Ext.selection.CheckboxModel',{
+            injectCheckbox: 0,
+            mode: 'MULTI'
+        });
+        selModel.select(this.getSelectedRecords());
+
+
         this.logger.log('_addItemGrid', store);
-        this.down('#item_box').add({
+        var grid = this.down('#item_box').add({
             xtype: 'rallygrid',
             store: store,
             itemId: 'ct-item',
@@ -61,23 +71,28 @@ Ext.define('Rally.technicalservices.dialog.PickerDialog',{
             width: this._getItemCtWidth(),
             margin: 15,
             showRowActionsColumn: false,
-            selType: 'checkboxmodel',
-            selModel: {
-                injectCheckbox: 0,
-                mode: 'MULTI'
-            },
-            columnCfgs: column_cfgs,
+           // selType: 'checkboxmodel',
+            selModel: selModel,
+            //{
+            //    injectCheckbox: 0,
+            //    mode: 'MULTI'
+            //},
+             columnCfgs: column_cfgs,
             showPagingToolbar: false
         });
-        
-        //select the records
-        var records = this.records || [];
-        this.down('#ct-item').getSelectionModel().select(records);
+        grid.on('beforerender',function(grid){
+            console.log('load',grid);
+            //var record = store.getAt(1);
+            grid.getSelectionModel().select(this.getSelectedRecords());
+            console.log('selModel',grid.getSelectionModel());
+
+        },this, {single: true});
     },
     _getItemCtWidth: function(){
         return this.width - 30;
     },
     _onApplyClick: function(){
+        console.log('apply',this.down('#ct-item').getSelectionModel());
         var selected_records = this.down('#ct-item').getSelectionModel().getSelection();
         this.fireEvent('itemselected',selected_records);
         this.destroy(); 
@@ -133,7 +148,7 @@ Ext.define('Rally.technicalservices.dialog.PickerDialog',{
             text: "Apply",
             width: 90,
             handler: this._onApplyClick,
-            scope: this,
+            scope: this
         }]
     }
 });

@@ -9,6 +9,8 @@ Ext.define('CustomApp', {
         {xtype:'container',itemId:'display_box'},
         {xtype:'tsinfolink'}
     ],
+    stateful: true,
+    stateId: 'artifactGrowthAppState', //this.getContext().getScopedStateId('appState'),
     granularityStore: [{
         displayName: 'Month',
         value: 'month',
@@ -27,7 +29,8 @@ Ext.define('CustomApp', {
     }],
     defaultDateSubtractor: -3,
     workspaces: null,
-    selectedWorkspaces: null, 
+    selectedWorkspaces: null,
+    selectedWorkspaceOids: [],
     launch: function() {
 
         Rally.technicalservices.Toolbox.fetchWorkspaces().then({
@@ -41,9 +44,40 @@ Ext.define('CustomApp', {
             }
         });
     },
+    _getCurrentWorkspaceRecord: function(){
+        var currentWorkspaceOid = this.getContext().getWorkspace().ObjectID;
+        var record = this.workspaces[0];
+        Ext.each(this.workspaces, function(workspace){
+            if (workspace.get('ObjectID') == currentWorkspaceOid){
+                record = workspace;
+                return false;
+            }
+        });
+        return record;
+    },
+    _getSelectedWorkspaceObjects: function(){
+        var selectedWorkspaces = [];
+        var currentWorkspace = null;
+        if (this.selectedWorkspaceOids.length > 0){
+            Ext.each(this.workspaces, function(wksp){
+                if (Ext.Array.contains(this.selectedWorkspaceOids,wksp.get('ObjectID'))){
+                    selectedWorkspaces.push(wksp);
+                }
+                if (wksp.get('ObjectID') == this.getContext().getWorkspace().ObjectID){
+                    currentWorkspace = wksp;
+                }
+            }, this);
+        }
+        this.logger.log('_getSelectedWorkspaceObjects',this.selectedWorkspaceOids, selectedWorkspaces);
+        if (selectedWorkspaces.length > 0) {
+            return selectedWorkspaces;
+        }
+        currentWorkspace = currentWorkspace || this._getCurrentWorkspaceRecord();
+        return [currentWorkspace];
+    },
     _initialize: function(workspaces){
         this.workspaces = workspaces; 
-        this.selectedWorkspaces = [this.getContext().getWorkspace()];
+        this.selectedWorkspaces = this._getSelectedWorkspaceObjects();
         
         var types = ['Defect','HierarchicalRequirement','Task','PortfolioItem'];
         var filter = Ext.create('Rally.data.wsapi.Filter', {
@@ -70,6 +104,9 @@ Ext.define('CustomApp', {
             margin: 10,
             valueField: 'TypePath',
             displayField: 'DisplayName',
+            stateful: true,
+            stateId: this.getContext().getScopedStateId('artifactType'),
+            stateEvents: ['change']
         });
         
         this.down('#selector_box').add({
@@ -80,8 +117,24 @@ Ext.define('CustomApp', {
             margin: 10,
             labelWidth: 75,
             value: Rally.util.DateTime.add(new Date(),"month",this.defaultDateSubtractor)
+            //stateful: true,
+            //stateId: this.getContext().getScopedStateId('startDate'),
+            //stateEvents: ['change']
         });
-        
+
+        this.down('#selector_box').add({
+            xtype: 'rallydatefield',
+            labelAlign: 'right',
+            fieldLabel: 'End Date',
+            itemId: 'dt-end',
+            margin: 10,
+            labelWidth: 75,
+            value: new Date()
+            //stateful: true,
+            //stateId: 'dt-end',
+            //stateEvents: ['change']
+        });
+
         this.down('#selector_box').add({
             xtype: 'rallybutton',
             text: 'Workspaces...',
@@ -119,9 +172,45 @@ Ext.define('CustomApp', {
             }
         });
     },
+    /**
+     * Gets the current state of the object. By default this function returns null,
+     * it should be overridden in subclasses to implement methods for getting the state.
+     * @return {Object} The current state
+     */
+    getState: function(){
+        this.logger.log('getState');
+        var workspaceOids = _.map(this.selectedWorkspaces, function(w){
+            return w.ObjectID || w.get('ObjectID');
+        });
+        return{
+            selectedWorkspaceOids: workspaceOids
+        };
+    },
+
+    /**
+     * Applies the state to the object. This should be overridden in subclasses to do
+     * more complex state operations. By default it applies the state properties onto
+     * the current object.
+     * @param {Object} state The state
+     */
+    applyState: function(state){
+        if (state && state.selectedWorkspaceOids && state.selectedWorkspaceOids.length > 0) {
+            this.selectedWorkspaceOids = state.selectedWorkspaceOids;
+            //Ext.apply(this, state);
+        }
+        this.logger.log('applyState', state, this.selectedWorkspaceOids);
+    },
+
     _workspacesSelected: function(records){
         this.logger.log('_workspacesSelected', records); 
-        this.selectedWorkspaces = records; 
+        if (records.length > 0){
+            this.selectedWorkspaces = records;
+        } else {
+            this.selectedWorkspaces = [this.getContext().getWorkspace()];
+        }
+
+        //Save selected workspaces
+        this.saveState();
         this._run();
     }, 
     _run: function(){
@@ -131,14 +220,14 @@ Ext.define('CustomApp', {
         var type = cb.getValue(); 
         var displayType = cb.getRecord().get(cb.displayField);
         
-        var granularity = "day";
-        var dateFormat = "Y-m-d";
-        var end_date = new Date();
+        var granularity = "month";
+        var dateFormat = "M yyyy";
         var start_date = this.down('#dt-start').getValue();
+        var end_date = this.down('#dt-end').getValue();
         var dateBuckets= Rally.technicalservices.Toolbox.getDateBuckets(start_date, end_date, granularity);
 
         this.setLoading(true);
-        this._fetchSeriesData(workspaces, type, dateBuckets, granularity).then({
+        this._fetchSeriesData(workspaces, type, dateBuckets, granularity,end_date).then({
             scope: this,
             success: function(results){
                 this.logger.log('_fetchData success:', results);
@@ -168,7 +257,7 @@ Ext.define('CustomApp', {
         var artifact_type = cb.getValue();
         var filename = Ext.String.format('{0}-growth-{1}.csv', artifact_type, Rally.util.DateTime.format(new Date(),'Y-m-d'));
         if (this.exportData){
-            Rally.technicalservices.FileUtilities.saveTextAsFile(this.exportData, filename);
+            Rally.technicalservices.FileUtilities.saveCSVToFile(this.exportData, filename);
         }
     },
     setExportData: function(seriesData, categories, errors){
@@ -207,7 +296,7 @@ Ext.define('CustomApp', {
         }
 
         var title_text = Ext.String.format('{0} growth',displayName);
-        var tick_interval = 5;  
+        var tick_interval = 1;
         
         this.down('#display_box').add({
             xtype: 'rallychart',
@@ -235,7 +324,7 @@ Ext.define('CustomApp', {
                     {
                         title: {
                             text: 'Number of Artifacts'
-                        },
+                        }
                     }
                 ],
                 plotOptions: {
@@ -244,24 +333,22 @@ Ext.define('CustomApp', {
                             format: '{point.y:.1f}%'
                         },
                         marker: {
-                            enabled: false,
-                        },
+                            enabled: false
+                        }
                     }
                 }
             }
         });        
     },
 
-   _fetchSeriesData: function(workspaces, type, dateBuckets, granularity){
+   _fetchSeriesData: function(workspaces, type, dateBuckets, granularity, endDate){
        var deferred = Ext.create('Deft.Deferred');
        
        var promises = [];  
-       var end_date = new Date();
-       
        this.logger.log('_fetchSeriesData');
        
        Ext.each(workspaces, function(wksp){ 
-           promises.push(this._fetchWorkspaceData(wksp, type, dateBuckets, granularity));
+           promises.push(this._fetchWorkspaceData(wksp, type, dateBuckets, granularity, endDate));
        },this);
        
        Deft.Promise.all(promises).then({
@@ -278,14 +365,14 @@ Ext.define('CustomApp', {
        
        return deferred;
    },
-   _fetchWorkspaceData: function(wksp, type,  dateBuckets, granularity){
+   _fetchWorkspaceData: function(wksp, type,  dateBuckets, granularity, endDate){
        var deferred = Ext.create('Deft.Deferred');
        var wkspName = wksp.Name || wksp.get('Name');
        this._fetchTypeBaselineCountWsapi(wksp, type, dateBuckets[0]).then({
            scope: this,
            success: function(obj){
               this.setLoading('Fetching data from ' + wkspName); 
-              this._fetchCreationDatesLookback(wksp, type, obj.maxObjectID, obj.count, dateBuckets, granularity).then({
+              this._fetchCreationDatesLookback(wksp, type, obj.maxObjectID, obj.count, dateBuckets, granularity, endDate).then({
                   scope: this,
                   success: function(obj){
                       deferred.resolve(obj);
@@ -298,19 +385,20 @@ Ext.define('CustomApp', {
        });
        return deferred;  
    },
-   _fetchCreationDatesLookback: function(wksp, type, objectID, baselineCount, dateBuckets, granularity){
-       this.logger.log('_fetchCreationDatesLookback',wksp, type, objectID, baselineCount);
+   _fetchCreationDatesLookback: function(wksp, type, objectID, baselineCount, dateBuckets, granularity, endDate){
+       this.logger.log('_fetchCreationDatesLookback',wksp, type, objectID, baselineCount, endDate);
        var deferred = Ext.create('Deft.Deferred');
        var wkspRef = wksp._ref || wksp.get('_ref');
        var wkspName = wksp.Name || wksp.get('Name');
        var start = Date.now();
+       var atDate = Rally.util.DateTime.toIsoString(endDate);
        Ext.create('Rally.data.lookback.SnapshotStore',{
            autoLoad: true,
            context: {workspace: wkspRef},
            find: {
                "_TypeHierarchy": type,
                "ObjectID": {$gt: objectID},
-               "__At": "current"
+               "__At": atDate //"current"
            },
            fetch: ["CreationDate"],
            listeners: {

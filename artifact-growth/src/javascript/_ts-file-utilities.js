@@ -1,7 +1,21 @@
 Ext.define('Rally.technicalservices.FileUtilities', {
     singleton: true,
     logger: new Rally.technicalservices.Logger(),
-    
+    saveCSVToFile:function(csv,file_name,type_object){
+        if (type_object == undefined){
+            type_object = {type:'text/csv;charset=utf-8'};
+        }
+        var blob = new Blob([csv],type_object);
+        saveAs(blob,file_name);
+    },
+    saveHTMLToFile:function(html,file_name,type_object){
+        if (type_object == undefined){
+            type_object = {type:'text/html;charset=utf-8'};
+        }
+        var blob = new Blob([html],type_object);
+        saveAs(blob,file_name);
+    },
+
     saveTextAsFile: function(textToWrite, fileName)
     {
         var textFileAsBlob = new Blob([textToWrite], {type:'text/plain'});
