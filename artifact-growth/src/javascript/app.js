@@ -37,7 +37,8 @@ Ext.define('CustomApp', {
             scope: this,
             success: function(workspaces){
                 this.logger.log('fetchWorkspaces Success', workspaces.length);
-                this._initialize(workspaces);
+                this.workspaces = workspaces;
+                this._initialize(workspaces, this._getSelectedWorkspaceObjects());
             }, 
             failure: function(msg){
                 Rally.ui.notify.Notifier.showError({message: msg});
@@ -75,21 +76,51 @@ Ext.define('CustomApp', {
         currentWorkspace = currentWorkspace || this._getCurrentWorkspaceRecord();
         return [currentWorkspace];
     },
-    _initialize: function(workspaces){
-        this.workspaces = workspaces; 
-        this.selectedWorkspaces = this._getSelectedWorkspaceObjects();
-        
-        var types = ['Defect','HierarchicalRequirement','Task','PortfolioItem'];
-        var filter = Ext.create('Rally.data.wsapi.Filter', {
-            property: 'Name',
-            value: types[0] 
-        });        
-        for (var i=1; i< types.length; i++){
-            filter = filter.or(Ext.create('Rally.data.wsapi.Filter', {
-                property: 'TypePath',
-                value: types[i]
-            }));        
+    _refreshArtifactChoicesAndRun: function(){
+        var cb = this.down('#cb-artifact');
+        if (cb){
+            this._getArtifactFilters(this.selectedWorkspaces.length).then({
+                scope: this,
+                success: function(filters){
+                    cb.getStore().clearFilter(true);
+                    cb.getStore().filter(filters);
+                    cb.getStore().on('load', this._run, this, {single: true});
+                }
+            });
         }
+    },
+    _fetchPortfolioItemTypes: function(){
+        var deferred = Ext.create('Deft.Deferred');
+
+        Ext.create('Rally.data.wsapi.Store',{
+            model: 'TypeDefinition',
+            fetch: ['TypePath','Ordinal'],
+            autoLoad: true,
+            filters: [{
+                property: 'TypePath',
+                operator: 'contains',
+                value: 'PortfolioItem/'
+            }],
+            listeners: {
+                scope: this,
+                load: function(store, data, success){
+                    var pi_types = new Array(data.length);
+                    Ext.each(data, function(d){
+                        //Use ordinal to make sure the lowest level portfolio item type is the first in the array.
+                        var idx = Number(d.get('Ordinal'));
+                        pi_types[idx] = d.get('TypePath');
+                    }, this);
+                    deferred.resolve(pi_types);
+                }
+            }
+        });
+        return deferred.promise;
+    },
+    _addSelectors: function(typeFilters, run){
+        this.logger.log('_addSelectors',typeFilters.toString());
+
+        this.down('#selector_box').removeAll();
+
         this.down('#selector_box').add({
             xtype: 'rallycombobox',
             fieldLabel: 'Artifact Type',
@@ -98,8 +129,8 @@ Ext.define('CustomApp', {
             storeConfig: {
                 autoLoad: true,
                 model: 'TypeDefinition',
-                filters: filter,
-                 remoteFilter: true
+                filters: typeFilters,
+                remoteFilter: true
             },
             margin: 10,
             valueField: 'TypePath',
@@ -108,7 +139,7 @@ Ext.define('CustomApp', {
             stateId: this.getContext().getScopedStateId('artifactType'),
             stateEvents: ['change']
         });
-        
+
         this.down('#selector_box').add({
             xtype: 'rallydatefield',
             labelAlign: 'right',
@@ -117,9 +148,6 @@ Ext.define('CustomApp', {
             margin: 10,
             labelWidth: 75,
             value: Rally.util.DateTime.add(new Date(),"month",this.defaultDateSubtractor)
-            //stateful: true,
-            //stateId: this.getContext().getScopedStateId('startDate'),
-            //stateEvents: ['change']
         });
 
         this.down('#selector_box').add({
@@ -158,7 +186,50 @@ Ext.define('CustomApp', {
             handler: this._export,
             disabled: true
         });
-        
+    },
+    _getArtifactFilters: function(numWorkspaces){
+        var deferred = Ext.create('Deft.Deferred');
+
+        var types = ['Defect','HierarchicalRequirement','Task','PortfolioItem'];
+        var filters = [];
+        Ext.each(types, function(t){
+            filters.push({
+                property: 'TypePath',
+                value: t
+            });
+        });
+
+        if (numWorkspaces == 1){
+            //Get the PI types and add those to the list
+            this._fetchPortfolioItemTypes().then({
+                scope: this,
+                success: function(types){
+                    this.logger.log('fetchPortfolioItemTypes',types);
+                    Ext.each(types, function(t){
+                        filters.push({
+                            property: 'TypePath',
+                            value: t
+                        });
+                    });
+                    this.logger.log('filters',filters);
+                    filters = Rally.data.wsapi.Filter.or(filters);
+                    deferred.resolve(filters);
+                }
+            });
+        } else {
+            filters = Rally.data.wsapi.Filter.or(filters);
+            deferred.resolve(filters);
+        }
+        return deferred;
+    },
+    _initialize: function(workspaces, selectedWorkspaces, runWhenDone){
+        this.selectedWorkspaces = selectedWorkspaces;
+        this._getArtifactFilters(selectedWorkspaces.length).then({
+            scope: this,
+            success: function(filters){
+                this._addSelectors(filters, runWhenDone);
+            }
+        });
     },
     _selectWorkspaces: function(){
         this.logger.log('_selectWorkspaces', this.workspaces);
@@ -203,23 +274,32 @@ Ext.define('CustomApp', {
 
     _workspacesSelected: function(records){
         this.logger.log('_workspacesSelected', records); 
+        var needChoiceUpdate = (records.length <= 1 || this.selectedWorkspaces.length == 1);
         if (records.length > 0){
             this.selectedWorkspaces = records;
         } else {
             this.selectedWorkspaces = [this.getContext().getWorkspace()];
         }
-
         //Save selected workspaces
         this.saveState();
-        this._run();
-    }, 
+        if (needChoiceUpdate){
+            this._refreshArtifactChoicesAndRun();
+        } else {
+            this._run();
+        }
+     },
     _run: function(){
         var workspaces = this.selectedWorkspaces || [this.getContext().getWorkspace()];
         
         var cb = this.down('#cb-artifact');
         var type = cb.getValue(); 
+        this.logger.log('_run',workspaces, cb, type, cb.getRecord());
+        if (type == null){
+            cb.setValue('PortfolioItem');
+            type = cb.getValue();
+        }
         var displayType = cb.getRecord().get(cb.displayField);
-        
+
         var granularity = "month";
         var dateFormat = "M yyyy";
         var start_date = this.down('#dt-start').getValue();
