@@ -481,6 +481,7 @@ Ext.define('CustomApp', {
                "__At": atDate //"current"
            },
            fetch: ["CreationDate"],
+           limit: 'Infinity',
            listeners: {
                scope: this,
                load: function(store, records, success){

@@ -3,11 +3,11 @@
 <head>
     <title>Artifact Growth</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Mon Apr 06 2015 11:43:04 GMT-0600 (MDT) -->
+    <!--  Build Date: Thu May 21 2015 08:07:23 GMT-0700 (PDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Mon Apr 06 2015 11:43:04 GMT-0600 (MDT)";
-        var CHECKSUM = 68496884594;
+        var APP_BUILD_DATE = "Thu May 21 2015 08:07:23 GMT-0700 (PDT)";
+        var CHECKSUM = 68556045029;
     </script>
     
     <script type="text/javascript" src="/apps/2.0/sdk.js"></script>
@@ -1540,6 +1540,7 @@ Ext.define('CustomApp', {
                "__At": atDate //"current"
            },
            fetch: ["CreationDate"],
+           limit: 'Infinity',
            listeners: {
                scope: this,
                load: function(store, records, success){
