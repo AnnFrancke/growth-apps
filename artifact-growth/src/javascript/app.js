@@ -427,8 +427,9 @@ Ext.define('CustomApp', {
        var promises = [];  
        this.logger.log('_fetchSeriesData');
        
-       Ext.each(workspaces, function(wksp){ 
-           promises.push(this._fetchWorkspaceData(wksp, type, dateBuckets, granularity, endDate));
+       Ext.each(workspaces, function(wksp){
+           //promises.push(this._fetchWorkspaceData(wksp, type, dateBuckets, granularity, endDate));
+           promises.push(this._fetchWorkspaceDataWsapiOnly(wksp, type, dateBuckets, granularity, endDate));
        },this);
        
        Deft.Promise.all(promises).then({
@@ -445,6 +446,28 @@ Ext.define('CustomApp', {
        
        return deferred;
    },
+    _fetchWorkspaceDataWsapiOnly: function(wksp, type, dateBuckets, granularity, endDate){
+      var deferred = Ext.create('Deft.Deferred');
+      var promises = [];
+        _.each(dateBuckets, function(db){
+            promises.push(this._fetchTypeBaselineCountWsapi(wksp, type, db));
+        }, this);
+
+        Deft.Promise.all(promises).then({
+            scope: this,
+            success: function(results){
+                this.logger.log('_fetchWorkspaceDataWsapiOnly',results);
+                var data = this._mungeWsapiDataForWorkspace(wksp, type, dateBuckets, granularity, results);
+                deferred.resolve(data);
+            },
+            failure: function(msg){
+                deferred.reject(msg);
+            }
+        });
+        return deferred;
+    },
+
+
    _fetchWorkspaceData: function(wksp, type,  dateBuckets, granularity, endDate){
        var deferred = Ext.create('Deft.Deferred');
        var wkspName = wksp.Name || wksp.get('Name');
@@ -499,6 +522,18 @@ Ext.define('CustomApp', {
        });
        return deferred; 
    },
+    _mungeWsapiDataForWorkspace: function(wksp, type, dateBuckets, granularity, results){
+        this.logger.log('_mungeDataForWorkspace');
+
+        var series_data = _.range(dateBuckets.length).map(function(){return 0});
+        for (var i=0; i < dateBuckets.length; i++){
+            series_data[i]=results[i].count;
+        }
+
+        var wkspName = wksp.Name || wksp.get('Name');
+        this.logger.log('series data', wkspName,series_data);
+        return {name: wkspName, data: series_data, stack: 1, type: 'area'};
+    },
    _mungeDataForWorkspace: function(wksp, type, baselineCount, dateBuckets, granularity, records){
        this.logger.log('_mungeDataForWorkspace');
        
