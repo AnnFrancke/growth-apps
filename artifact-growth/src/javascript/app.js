@@ -367,7 +367,7 @@ Ext.define('CustomApp', {
         this.logger.log('_showErrors',errorStrings);
     },
     _drawChart: function(seriesData, categories, displayName){
-        this.logger.log('_drawChart');
+        this.logger.log('_drawChart', seriesData, categories);
         
         var me = this;
         var chart = this.down('#rally-chart') 
@@ -403,7 +403,7 @@ Ext.define('CustomApp', {
                 yAxis: [
                     {
                         title: {
-                            text: 'Number of Artifacts'
+                            text: 'Count'
                         }
                     }
                 ],
